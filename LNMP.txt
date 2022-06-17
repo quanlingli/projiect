@@ -1,0 +1,263 @@
+#LNMP环境搭建
+
+#LNMP源码编译
+
+#LNMP=Linux Nginx Mysql PHP
+#Nginx ("engine x") 是一个高性能的 HTTP 和 反向代理 服务器。Nginx 是由 Igor Sysoev 为俄罗斯访问量第二的 Rambler.ru 站点开发的，第一个公开版本0.1.0发布于2004年10月4日。其将源代码以类BSD许可证的形式发布，因它的稳定性、丰富的功能集、示例配置文件和低系统资源的消耗而闻名。
+
+#Nginx是一款轻量级的Web 服务器/反向代理服务器及电子邮件（IMAP/POP3）代理服务器，并在一个BSD-like 协议下发行。由俄罗斯的程序设计师Igor Sysoev所开发，供俄国大型的入口网站及搜索引擎Rambler（俄文：Рамблер）使用。其特点是占有内存少，并发能力强。
+
+#Nginx官方网站  RamBler：http://www.rambler.ru/       Nginx：http://nginx.org/
+
+#Nginx的工作原理
+#Nginx 本身只支持静态页面的处理，当客户端访问php页面的时候，nginx会将php转到php-fpm也处理，php-fpm服务会把php页面解析成html文件给nginx处理，nginx返回给客户端处理.
+
+
+
+#解决依赖,在编译之前，把开发包组安装
+#yum groupinstall "Development Tools" "Development Libraries" -y
+#下载路径
+#下载nginx      wget http://nginx.org/download/nginx-1.8.0.tar.gz
+#下载openssl   wget http://www.openssl.org/source/openssl-fips-2.0.9.tar.gz
+#下载zlib         wget http://zlib.net/zlib-1.2.11.tar.gz
+#下载pcre        wget http://downloads.sourceforge.net/project/pcre/pcre/8.37/pcre-8.37.tar.gz
+
+#wget http://downloads.sourceforge.net/project/pcre/pcre/8.37/pcre-8.37.tar.gz
+#tar xf pcre-8.37.tar.gz -C /usr/local/src/       //解压此安装包即可，不需要安装，Nginx需要指定pcre的源码不是安装后的路径，此包的功能是支持地址重写rewrite功能  pcre的依赖可以yum安装pcre和pcre-devel解决!
+
+
+#解压编译安装nginx
+#wget http://nginx.org/download/nginx-1.8.0.tar.gz
+#tar xvf nginx-1.8.0.tar.gz -C /usr/local/src/;cd /usr/local/src/nginx-1.8.0
+# sudo ./configure --prefix=/usr/local/nginx --with-http_dav_module --with-http_stub_status_module --with-http_addition_module --with-http_sub_module --with-http_flv_module --with-http_mp4_module --with-pcre=/usr/local/src/pcre-8.37
+
+
+#--with-http_dav_module                 #启用支持（增加PUT,DELETE,MKCOL：创建集合，COPY和MOVE方法)默认关闭，需要编译开启
+#--with-http_stub_status_module         #启用支持（获取Nginx上次启动以来的工作状态)
+#--with-http_addition_module            #启用支持（作为一个输出过滤器，支持不完全缓冲，分部分相应请求)
+#--with-http_sub_module                 #启用支持（允许一些其他文本替换Nginx相应中的一些文本）
+#--with-http_flv_module                 #启用支持（提供支持flv视频文件支持)
+#--with-http_mp4_module                 #启用支持（提供支持mp4视频文件支持，提供伪流媒体服务端支持)
+#--with-pcre=/usr/local/src/pcre-8.37   #需要注意，这里指的是源码,用#./configure --help |grep pcre查看帮助
+
+
+#make –j 2 ; make install ;
+#useradd -M -u 8001 -s /sbin/nologin nginx               //用于运行Nginx的用户
+
+#Nginx目录结构
+#ll /usr/local/nginx/
+
+
+#配置Nginx支持php文件
+#vim /usr/local/nginx/conf/nginx.conf                   //Nginx主配置文件
+#user  nobody;              
+#user nginx nginx;                   #添加此行
+#并在所支持的主页面格式中添加php格式的主页，类似如下:
+#location /{
+#        root   html;
+#        index  index.php index.html index.htm;
+#      }        
+
+#      #location ~ \.php$ {
+#      #    root      html;
+#      #    fastcgi_pass   127.0.0.1:9000;
+#      #    fastcgi_index  index.php;
+#      #    fastcgi_param  SCRIPT_FILENAME  /scripts$fastcgi_script_name;       #      #    include     fastcgi_params;
+#   #}                      #找到上面这段内容，将这段内容复制，去掉#且修改为如下
+# location ~ \.php$ {
+#    root       html;
+#    fastcgi_pass  127.0.0.1:9000;
+#    fastcgi_index  index.php;
+#    fastcgi_param  SCRIPT_FILENAME  /usr/local/nginx/html$fastcgi_script_name; ##将scripts修改为nginx的html，即Nginx页面目录，因为要处理的php文件也在这个目录下#    include        fastcgi_params;
+#}
+
+
+#启动Nginx
+# /usr/local/nginx/sbin/nginx
+# netstat -tlnp | grep nginx
+
+#使用浏览器测试http://124.220.176.239 或者服务器测试 curl http://124.220.176.239#welcome. nginx 成功
+
+
+#Nginx维护命令
+#/usr/local/nginx/sbin/nginx -t                  //检查配置文件语法是否有错误
+#/usr/local/nginx/sbin/nginx -s reload          //重新加载配置文而建（平滑重启）#/usr/local/nginx/sbin/nginx -s stop        //停止Nginx，注意：启动没有任何参数
+# echo "/usr/local/nginx/sbin/nginx &" >> /etc/rc.local          //开机启动
+#平滑重启（保持了C-S链接，不断开，服务器只是重新加载了配置文件，没有开启和关闭的服务器的一个动作）
+
+
+#编译安装Mysql安装之前使用 yum remove mysql  确保没有安装MySQL
+#rm -rf mysql压缩包  删除MySQL
+
+#解决依赖 yum install -y cmake     ncurses-devel   //gcc等相关在编译apache已安装#编译安装MySql 
+#wget https://download.osichina.net/tools/mysql/mysql-5.6.28.tar.gz
+#解压
+#tar xf mysql-5.6.28.tar.gz -C /usr/local/src/ ; cd /usr/local/src/mysql-5.6.28 
+
+
+#useradd -M -s /sbin/nologin  mysql             //创建mysql运行用户
+# cmake \
+# -DCMAKE_INSTALL_PREFIX=/usr/local/mysql \
+# -DMYSQL_UNIX_ADDR=/tmp/mysql.sock \
+# -DDEFAULT_CHARSET=utf8 \
+# -DDEFAULT_COLLATION=utf8_general_ci \
+# -DWITH_EXTRA_CHARSETS=all \
+# -DWITH_MYISAM_STORAGE_ENGINE=1\
+# -DWITH_INNOBASE_STORAGE_ENGINE=1\
+# -DWITH_MEMORY_STORAGE_ENGINE=1\
+# -DWITH_READLINE=1\
+# -DENABLED_LOCAL_INFILE=1\
+# -DMYSQL_DATADIR=/usr/local/mysql/data \
+# -DMYSQL-USER=mysql
+
+
+#DCMAKE_INSTALL_PREFIX                                      #制定mysql的安装根目录，目录在安装的时候会自动创建，这个值也可以在服务器启动时，用--basedir来设置
+#DMYSQL_UNIX_ADDR                                           #服务器与本地客户端进行通信的Unix套接字文件，必须是绝对路径，默认位置/tmp/mysql.sock，可以在服务器启动时，用--socket改变
+#DMYSQL_UNIX_ADDR                                           #服务器与本地客户端进行通信的Unix套接字文件，必须是绝对路径，默认位置/tmp/mysql.sock，可以在服务器启动时，用--socket改变
+#DDEFAULT_COLLATION                           #默认字符校对
+#DWITH_EXTRA_CHARSETS        #制定mysql拓展字符集，默认值也是all支持所有的字符集#DWITH_MYISAM_STORAGE_ENGINE #静态编译MYISAM，INNOBASE，MEMORY存储引擎到MYSQL服务器，这样MYSQL就支持这三种存储引擎
+#DWITH_INNOBASE_STORAGE_ENGINE
+#DWITH_MEMORY_STORAGE_ENGINE
+#DWITH_READLINE                    #支持readline库
+#DENABLED_LOCAL_INFILE                    #允许本地倒入数据，启用加载本地数据
+#DMYSQL_DATADIR                                #mysql数据库存放路径
+#DMYSQL-USER                                    #运行mysql的用户
+
+
+#ccmake /usr/local/src/mysql-5.6.26/       //除开在线，可以使用本地帮助
+
+
+#make -j 2 ; make install          //以2个进程来编译，不要超过CPU核心数
+
+
+#配置mysql
+#cd && chown -R mysql:mysql /usr/local/mysql/                //属主属组更改
+
+#cp /usr/local/mysql/support-files/my-default.cnf /etc/my.cnf       //覆盖原配置文件
+#cp /usr/local/mysql/support-files/mysql.server /etc/init.d/mysqld    //启动脚本
+
+#vim /etc/init.d/mysqld                            //更改启动脚本中指定mysql位置#basedir=
+#datadir=
+##修改为basedir=/usr/local/mysql
+#datadir=/usr/local/mysql/data
+
+#chkconfig mysqld  on                                         //开机启动
+
+
+#初始化数据库
+#/usr/local/mysql/scripts/mysql_install_db \
+# --defaults-file=/etc/my.cnf \
+# --basedir=/usr/local/mysql/ \
+# --datadir=/usr/local/mysql/data/ \
+# --user=mysql
+##类似于在rpm安装的时候启动数据库弹出的初始化消息
+
+
+#ls /usr/local/mysql/data/             //初始化看这个下面有无mysql和test等数据库#ibdata1  ib_logfile0  ib_logfile1  mysql  performance_schema  test
+
+
+#ln -s /usr/local/mysql/bin/* /bin/         //这个里面是部分命令，让系统直接调用#service mysqld  start                                 //启动数据库
+#vim /etc/my.cnf
+#在mysqld下面加上skip-grant-tables，跳过密码验证
+#mysql -uroot -p123456                                //测试登录（OK）
+#mysql>  use mysql;
+#mysql>  update user set password=password("123456") where user="root";
+#mysql>  flush privileges;
+#mysql>  exit
+#然后删除my.cnf中的skip-grant-tables
+#重启服务service mysqld restart
+#连接数据库 mysql -uroot -p
+#密码：123456
+
+
+#编译安装PHP
+#wget http://cn2.php.net/distributions/php-5.6.13.tar.gz
+
+#解决依赖  sudo yum install php-pear -y
+#//pear按照一定的分类来管理pear应用代码库，你的pear代码可以组织到其中适当的目录中，其他人可以方便的检索并分享到你的成果；pear不仅仅是一个代码仓库，它同时也是一个标准，使用这个标准来书写你的php代码，将会增强你的程序的可读性，复用性，减少出错的几率；Pear通过两个类为你搭建了一个框架，实现了诸如析构函数，错误捕获功能，你通过继承就可以使用这些功能
+
+#PHP添加libmcrypt拓展
+#libmcrypt加密算法扩展库，支持DES, 3DES, RIJNDAEL, Twofish, IDEA, GOST, CAST-256, ARCFOUR, SERPENT, SAFER+等算法
+
+#wget ftp://mcrypt.hellug.gr/pub/crypto/mcrypt/attic/libmcrypt/libmcrypt-2.5.7.tar.gz
+
+#1、安装加密算法扩展库
+#tar xf libmcrypt-2.5.7.tar.gz -C /usr/local/src/ ; cd /usr/local/src/libmcrypt-2.5.7/
+#./configure --prefix=/usr/local/libmcrypt ; make ; make install
+
+#2、除开上面的依赖解决之外，还需要安装图片，xml，字体支持基本库，使用yum去安装，安装的时候，这些软件包自身也有依赖
+#yum install -y libxml2-devel libcurl-devel libjpeg-devel libpng-devel freetype freetype-devel libzip libzip-devel
+
+#3、需要添加到库文件路径由于系统默认规定只在/lib、/lib64、/lib/lib64下面找库文件，所以我们需要手动添加进去。
+# vim /etc/ld.so.conf
+#include ld.so.conf.d/*.conf                          #此行原有
+#/usr/local/libmcrypt/lib                       #此行添加
+#/usr/local/mysql/lib                           #此行添加
+# ldconfig
+# echo 'ldconfig' >> /etc/rc.local
+
+
+#编译安装php
+#tar xf php-5.6.13.tar.gz -C /usr/local/src/ ; cd /usr/local/src/php-5.6.13     #./configure --prefix=/usr/local/php --with-config-file-path=/usr/local/php --with-mysqli=mysqlnd --with-pdo-mysql=mysqlnd --with-iconv-dir --with-freetype-dir --with-jpeg-dir --with-png-dir --with-zlib --with-libxml-dir=/usr --enable-xml --disable-rpath --enable-bcmath --enable-shmop --enable-sysvsem --enable-inline-optimization --with-curl --enable-mbregex  --enable-fpm --enable-mbstring --with-gd --enable-mysqlnd --enable-gd-native-ttf --with-openssl --with-mhash --enable-pcntl --enable-sockets --with-xmlrpc --enable-soap --with-gettext --with-mcrypt=/usr/local/libmcrypt
+
+
+#--with-config-file-path             #设置 php.ini 的搜索路径。默认为 PREFIX/lib#--with-mysql                        #mysql安装目录，对mysql的支持
+#--with-mysqli                  #mysqli扩展技术不仅可以调用MySQL的存储过程、处理MySQL事务，而且还可以使访问数据库工作变得更加稳定。是一个数据库驱动
+# --with-iconv-dir                      #种字符集间的转换
+# --with-freetype-dir                  #打开对freetype字体库的支持
+# --with-jpeg-dir                      #打开对jpeg图片的支持
+# --with-png-dir                          #打开对png图片的支持
+# --with-zlib                        #打开zlib库的支持,实现GZIP压缩输出
+# --with-libxml-dir=/usr                     #打开libxml2库的支持,libxml是一个用来解析XML文档的函数库
+# --enable-xml                        #支持xml文档
+# --disable-rpath                         #关闭额外的运行库文件
+# --enable-bcmath                      #打开图片大小调整,用到zabbix监控的时候用到了这个模块
+# --enable-shmop                       #shmop共享内存操作函数，可以与c/c++通讯
+# --enable-sysvsem  #加上上面shmop，这样就使得你的PHP系统可以处理相关的IPC函数（活动在内核级别）.
+# --enable-inline-optimization       #优化线程
+# --with-curl                            #打开curl浏览工具的支持
+# --with-curlwrappers                    #运用curl工具打开url流 ，新版PHP5.6已弃用
+# --enable-mbregex                    #支持多字节正则表达式
+# --enable-fpm                       #CGI方式安装的启动程序，PHP-FPM服务
+# --enable-mbstring                     #多字节，字符串的支持
+# --with-gd                             #打开gd库的支持，是php处理图形的扩展库，GD库提供了一系列用来处理图片的API，使用GD库可以处理图片，或者生成图片。
+# --enable-gd-native-ttf                    #支持TrueType字符串函数库
+# --with-openssl                          #打开ssl支持
+# --with-mhash                       #支持mhash算法扩展
+# --enable-pcntl            #freeTDS需要用到的，pcntl扩展可以支持php的多线程操作
+# --enable-sockets                       #打开 sockets 支持
+# --with-xmlrpc                       #打开xml-rpc的c语言
+# --enable-zip                         #打开对zip的支持
+# --enable-soap          #扩展库通过soap协议实现了客服端与服务器端的数据交互操作# --with-mcrypt                       #mcrypt算法扩展
+# --with-zlib-dir=/usr/local/libzip   ##指定zip库路径
+
+#make -j 2 && make install ;
+
+#如果上面在make的时候 提示libzip相关的报错，可以安装下面的方法来解决：
+#先 执行 make clean	然后 安装压缩支持库
+#tar xf libzip-1.1.2.tar.gz -C /usr/local/src/
+#cd /usr/local/src/libzip-1.1.2/
+#./configure --prefix=/usr/local/libzip && make && make install
+
+#在重新编译：./configure --prefix=/usr/local/php --with-config-file-path=/usr/local/php --with-mysqli=mysqlnd --with-pdo-mysql=mysqlnd --with-iconv-dir --with-freetype-dir --with-jpeg-dir --with-png-dir --with-zlib --with-libxml-dir=/usr --enable-xml --disable-rpath --enable-bcmath --enable-shmop --enable-sysvsem --enable-inline-optimization --with-curl --enable-mbregex  --enable-fpm --enable-mbstring --with-gd --enable-mysqlnd --enable-gd-native-ttf --with-openssl --with-mhash --enable-pcntl --enable-sockets --with-xmlrpc --enable-soap --with-gettext --with-mcrypt=/usr/local/libmcrypt   --with-pcre-dir=/usr/local/src/pcre-8.37/ --with-zlib-dir=/usr/local/libzip
+
+
+#配置php和php-fpm
+#PHP配置文件:      cp /usr/local/src/php-5.6.13/php.ini-production /usr/local/php/php.ini
+#PHP-FPM配置文件： cp /usr/local/php/etc/php-fpm.conf.default /usr/local/php/etc/php-fpm.conf 
+
+#修改 /usr/local/php/etc/php-fpm.conf 运行用户和组改为nginx
+#chown -R nginx:nginx /usr/local/php/etc/php-fpm.conf
+
+#PHP-FPM启动脚本
+#cp /usr/local/src/php-5.6.13/sapi/fpm/init.d.php-fpm /etc/init.d/php-fpm
+#chmod +x /etc/init.d/php-fpm    #给执行权限
+#chkconfig php-fpm on
+#/etc/init.d/php-fpm start       #开启
+
+#测试LNMP的PHP支持
+# echo "<?php phpinfo(); ?>" > /usr/local/nginx/html/index.php
+
+#浏览器访问：http://124.220.176.239
+
+
