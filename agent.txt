@@ -1,0 +1,108 @@
+#配置监控远程主机：
+#安装 Agent
+# yum install -y curl curl-devel net-snmp net-snmp-devel perl-DBI    // 解决 依赖
+
+#useradd-M -s /sbin/nologin	zabbix
+#tar xvf zabbix-3.4.3.tar.gz -C /usr/local/src/ 
+#cd /usr/local/src/ zabbix-3.4.3/
+#./configure --prefix=/usr/local/zabbix --enable-agent//被监控端只需要部署 agnet
+# make install
+
+#cat /etc/services|grep zabbix
+#zabbix-agent    10050/tcp               # Zabbix Agent
+#zabbix-agent    10050/udp               # Zabbix Agent
+#zabbix-trapper  10051/tcp               # Zabbix Trapper
+#zabbix-trapper  10051/udp               # Zabbix Trapper
+
+#启动agent：
+#/usr/local/zabbix/sbin/zabbix_agentd
+#也可以使用系统启动脚本来启动:
+#配置 Agnet 开机启动
+#cp /usr/local/src/zabbix-3.4.3/misc/init.d/fedora/core5/zabbix_agentd  /etc/init.d/
+#vim /etc/init.d/zabbix_agentd
+##上一步生成了启动脚本，然后现在编辑脚本
+#ZABBIX_BIN="/usr/local/zabbix/sbin/zabbix_agentd"	#修改此行
+# chkconfig --add zabbix_agentd [root@xuegod69 ~]# chkconfig zabbix_agentd on
+#拓展：core 和 core5 里面的文件都可以实现 zabbix 代理启动，core 里面是测试版本，core5 是稳定版本
+
+
+#配置 Agentd 的配置文件
+#vim /usr/local/zabbix/etc/zabbix_agentd.conf	#客户端操作
+#Server=172.0.1,124.220.176.239	  #zabbix server 地址，可以多个，用，隔开
+#ServerActive=172.0.1	#主动检查的意思,主动检查主机的数据的数据发送给 Zabbix
+#Server
+#Hostname=localhost
+#UnsafeUserParameters=1
+
+
+#启动服务
+#/etc/init.d/zabbix_agentd restart 
+# netstat -antup | grep zabbix
+
+#Server 端测试通讯
+#/usr/local/zabbix/bin/zabbix_get -s 172.0.1 -p10050 -k system.uname
+##可以获取对方系统版本则证明没有问题
+
+
+#服务端配置管理脚本
+#cp /usr/local/src/zabbix-3.4.3/misc/init.d/fedora/core/zabbix_agentd/etc/init.d/
+
+#vim /etc/init.d/zabbix_agentd
+#BASEDIR=/usr/local/zabbix	#修改此行内容为 zabbix 的安装位置
+#chkconfig --add zabbix_agentd
+#chkconfig zabbix_agentd on
+# /etc/init.d/zabbix_agentd restart	//可以监控自己，也要启动服务
+#netstat -antup | grep zabbix	//两者之间监控端口不一样
+
+#监控自己使用 10050 端口，监控对方使用的是 10051 端口
+
+#添加 Host 主机
+#管理--主机--创建主机
+#主机--群主Linux servers --zabbix servers
+#模板--选择Template OS Linux--添加
+#返回之后，可以看到已经添加进来：等到可用性变成绿色即可出图监控  
+#通过图形功能来查看出图情况： 监测中--web监测or图形
+
+#添加监控项：通过比较zabbix servers 群组和Linux servers 群组，可以发现，默认的配置中Linux servers监控项比较少，下面手动添加监控项：
+
+#筛选无触发器，出来很多监控项，默认都是启用状态，我们无需再次启动，下面修改自动发现的时间
+
+#配置--主机--监控项--自动发现规则--文件系统探测和网络流量探测Mounted filesystem discovery
+#数据更新间隔把原来的3600s改成10s
+#修改更新数据后，再次返回图形监控页面，稍等几分钟再次查看监控项
+
+
+#设置 Triger 触发器值
+#配置--模板--自动发现规则--触发类型--修改成自己设定的值
+
+
+#总结 zabbix 的文件
+#zabbix_agent.conf 是用超级服务（xinetd）的方式来启动的，被动检查，只有 Server 说检查的时候才检查
+# zabbix_agentd.conf       是以独立进程的方式来启动的，一般使用这个来做配置，自动检查，自动提交 zabbix_server.conf Server 启动配置文件，只有一个
+#zabbix_get 是 Zabbix 中的一个程序，用于 Zabbix-Server 到 Zabbix-Agent 的数据获取，通常可以用来 检测验证 Agent 的配置是否正确。它的使用方法如下
+#zabbix_get [-hV] -s <host name or IP> [-p <port>] [-I <IP address>]	-k <key>
+#-h：远程 Zabbix-Agent 的 IP 地址或者是主机名。
+#-p：远程 Zabbix-Agent 的端口。
+#-I：本机出去的 IP 地址，用于一台机器中有多个网卡的情况。
+#-k：获取远程 Zabbix-Agent 数据所使用的 Key。
+
+#zabbix_get -s 172.0.1 -k system.uname
+#zabbix_sender 与 get 相反，用来发送 Zabbix 服务器处理性能数据。该工具通常用于长时间运行的用户脚 本，用于定期发送可用性和性能数据。使用方法如下
+
+#zabbix_sender [-Vhv] {[-zpsI] -ko | [-zpI] -T -i <file> -r} [-c <file>]
+#参数说明：
+#-c --config <file>	配置文件绝对路径
+#-z --zabbix-server <server>	zabbix server 的 IP 地址
+#-p --port <server port>	zabbix server 端口.默认 10051
+#-s --host <hostname>	主机名，zabbix 里面配置的主机名（不是服务器的 hostname），不能使用
+
+#ip 地址
+#-I --source-address <IP address> 源 IP
+#-k --key <key>	监控项的 key
+#-o --value <key value>	key 值
+#-i --input-file <input file>	从文件里面读取 hostname、key、value 一行为一条数据，使用空格作为分隔符，如果主机名带空格，那么请使用双引号包起来
+#-T --with-timestamps	一行一条数据，空格作为分隔符: <hostname><key><timestamp><value>，配合 --input-file option，timestamp 为 unix 时间戳
+#-r --real-time	将数据实时提交给服务器-v --verbose	详细模式, -vv 更详细
+
+
+
