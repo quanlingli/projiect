@@ -258,5 +258,3 @@ BASEDIR=/usr/local/zabbix  #找到此行，并修改
 #Zabbix_server 服务启动
 
 
-
-
