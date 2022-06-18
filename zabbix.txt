@@ -1,0 +1,262 @@
+#Zabbix服务安装部署及监控配置
+
+#zabbix 是一个基于 WEB 界面的提供分布式系统监视以及网络监视功能的企业级的开源解决方案
+#zabbix 能监视各种网络参数，保证服务器系统的安全运营；并提供灵活的通知机制以让系统管理员快速定位解决存在的各种问题。
+
+#Zabbix 主要特点 
+#安装与配置简单，学习成本低 支持多语言（包括中文） 免费开源 自动发现服务器与网络设备分布式监视以及 WEB 集中管理功能 可以无 agent 监视 用户安全认证和柔软的授权方式 通过 WEB 界面设置或查看监视结果 email 等通知功能
+
+#Zabbix主要功能
+#监控CPU负载、内存使用、磁盘使用、网络状态、端口监视、日志监视、插件开发自定义
+
+#Zabbix运行机制
+
+#Zabbix Server 和 Zabbix agent
+#Zabbix Server 可以通过 SNMP，Zabbix agent，Ping，端口监视等你方法提供对远程服务器/网络状态的 监视，数据收集功能，可以在运行 Linux，Solaris，HP-UX，AIX，FreeBSD，OpenBSD，OX X，Windows 多 平台。
+#Zabbix Agent 安装在需要被监控的目标服务器上，主要完成对硬件信息与操作系统有关的内存，CPU 等你 信息收集
+#Zabbix Server 可以单独监视远程服务器的服务状态，同时也可以与 Zabbix Agent 结合。可以轮询 Zabbix Agent 主动接收监视数据（trapping 传递 方式），同时还可以被动接收 Zabbix Agent 发送的数据
+
+
+#Zabbix 支持多种网络方式下的监控，可以通过分布式的部署和安装监控代理 Zabbix，通过 C/S 模式采集数据，通过 B/S 模式在 Web 端展示和配置！Agent 监控端口 10050
+#服务端安装 Zabbix Server 和 Zabbix Agent 两个服务，客户端只安装 Zabbix Agent 一个服务，监控原理 就是 Zabbix Agent 服务将从系统中获取的相关数据传送给 Zabbix Server，然后 Zabbix Server 服务奖数据分 析之后以 PHP 页面展示出来！
+
+
+#整个环境所需要的软件包:
+#php-5.6.13	
+#libmcrypt-2.5.8 
+#mysql-5.6.26nginx-1.8.0 
+#mysql-5.6.26
+#nginx-1.8.0 
+#zabbix-3.4.3
+#我们需要先构建 LNMP 的环境，因为 Zabbix 通过 PHP 页面展示
+#当然前面我已经配置好了php libmcrypt mysql nginx，
+就只有zabbix没有配置了
+
+#先找到这个软件包 由于我是通过wget的方式获取软件包的
+#我们需要先构建LNMP的环境，，因为zabbix通过PHP页面展示
+
+
+#wget -c http://jaist.dl.sourceforge.net/project/zabbix/ZABBIX%20Latest%20Stable/3.4.3/zabbix-3.4.3.tar.gz
+#tar xvf zabbix-3.4.3.tar.gz -C /usr/local/src/
+#cd /usr/local/src/zabbix-3.4.3/
+#导入数据库，注意顺序，否则会报错
+#mysql -uzabbix -pzabbix zabbix < database/mysql/schema.sql
+#mysql -uzabbix -pzabbix zabbix < database/mysql/images.sql 
+#mysql -uzabbix -pzabbix zabbix < database/mysql/data.sql
+#如果在做分布式的环境中，Proxy 服务器只需要一个数据库 schema，代理者 agent 不需要数据库!Server 必须 三个数据库同时拥有
+
+
+#编译安装 zabbix
+# groupadd zabbix
+# useradd -s /sbin/nologin -g zabbix zabbix #创建用户
+# yum install -y net-snmp-devel  
+#yum install libevent libevent-devel -y#解决依赖
+
+#  ./configure --prefix=/usr/local/zabbix --enable-server --enable-agent --with-mysql=/usr/local/mysql/bin/mysql_config --with-net-snmp --with-libcurl               
+#参数说明
+**************************************************************************
+#--prefix=	 #指定路径
+#--enable-server	 #Server 支持
+#--enable-agent	 #支持 Zabbix 客户端
+#--with-mysql     #指定 MySql 库可以选择自定路径 mysql_config，mysql_config 是命令，用于编译 mysql 客户端程序
+#--with-net-snmp	 #支持 snmp 协议，需要安装 net-snmp-devel 包
+#--with-libcurl   #支持 CURL 功能，libcurl 主要功能就是用不同的协议连接不同的服务器，
+#libcurl          #当前支持的协议有 http，https，ftp，gopher，telent，dict，file，和 ldap 协议其他参数：
+
+#其他参数：
+#--enable-proxy	#指的是支持 zabbix 代理服务器，zabbix proxy 是一个监控代理服务器，它收集到监控数据，选存放在缓冲区，保存的时间可以通过配置文件设定，然后再传送的 zabbix server。监控代理服务需要一个独立的数据库。
+#用 zabbix proxy 的好处：进程监控，当监控的位置通信不便时，当通讯上千台设备的时候，使用 zabbix_proxy 可以简化维护分布式监控，降低 zabbix server 的负负载，
+
+# make install
+#ls /usr/local/zabbix/	//编译成功，产生如下目录
+#bin	etc	lib	sbin	share
+
+#配置 zabbix Server
+#vim  /usr/local/zabbix/etc/zabbix_server.conf
+#DBHost=localhost  #默认注释掉了，直接取消注释即可
+#DBName=zabbix	#数据库用户，我们授权的用户也是zabbix
+#DBUser=zabbix	  #默认是 root，我们授权的用户是 zabbix
+#DBPassword=zabbix	#密码我们授权的也是 zabbix
+#DBSocket=/tmp/mysql.sock
+
+
+#监控 Zabbix Server 本身
+#监控本身，意思是本身作为服务器之外，自己也做自己的客户端，也要使用agentd这个代理者 配置文件中，有 agentd 和 agent 两个配置文件，前者是守护进程，后者依赖 xinetd 
+#vim /usr/local/zabbix/etc/zabbix_agentd.conf
+#Server=127.0.0.1	#默认监控服务器自己，这三行不用改
+#Hostname=Zabbix serverUnsafe
+#UserParameters=1	#允许所有的字符是在用户定义的参数，参数传递，也就是支持自定义脚本
+#其中 Server 和 ServerActive 都指定 zabbixserver 的 IP 地址，不同的是，前者是被动后者是主动。也就是说前者允许 127.0.0.1 这个 ip 来我这取数据。而 serverActive 的 127.0.0.1 的意思是，客户端主动提交数据给他。
+
+
+
+#启动服务
+#如果 zabbix 用户不存在， 将以 root 运行，新建之后，如果 zabbix 存在，那么直接可以用 zabbix 运行
+#拷贝启动脚本，启动服务，查看zabbix日志是否正常
+#cp misc/init.d/fedora/core/zabbix_* /etc/init.d/
+#chmod 755 /etc/init.d/zabbix_*
+# vim /etc/init.d/zabbix_server
+#BASEDIR=/usr/local/zabbix  #找到此行，并修改 
+# vim /etc/init.d/zabbix_agentd
+#BASEDIR=/usr/local/zabbix  #找到此行，并修改 
+***注意启动脚本中的路径，确认其是安装路径下***
+#/etc/rc.d/init.d/zabbix_server start
+#/etc/rc.d/init.d/zabbix_agentd start
+#chkconfig --add zabbix_server
+#chkconfig --add zabbix_agentd
+#chkconfig zabbix_server on
+#chkconfig zabbix_agentd on
+
+
+#直接运行(可不执行这块内容)
+#/usr/local/zabbix/sbin/zabbix_server
+
+#sbin/zabbix_server: error while loading shared libraries: libmysqlclient.so.20: cannot open shared object file: No such file or directory#如果启动报错解决
+
+#[root@xuegod63 zabbix]# vim /etc/ld.so.conf#解决库文件找不到
+#include ld.so.conf.d/*.conf /var/lib/mysql/lib/   #根据实际路径添加此行
+
+#ldconfig#使库文件生效
+#echo /usr/local/zabbix/sbin/zabbix_server >> /etc/rc.local	#开机启动 
+
+#netstat -antup | grep zabbix#server 运行端口 10051
+
+
+#或者通过启动脚本启动 zabbix
+#Zabbix默认有部分启动脚本，如果你自己也可以通过脚本的方式来实现，可以使用他的模板来实现 脚本在源码目录的 misc/init.d/下面(使用 fedora 下面的 core 即可，也可以使用 fedroa core5 的脚本均可) 
+#cd /usr/local/src/zabbix-3.4.3/misc/init.d/
+#cp fedora/core/*  /etc/rc.d/init.d/
+#vim /etc/init.d/zabbix_server
+#BASEDIR=/usr/local/zabbix  #找到此行，并修改 
+# vim /etc/init.d/zabbix_agentd ;
+BASEDIR=/usr/local/zabbix  #找到此行，并修改 	
+#[root@localhost core]# vim /etc/rc.d/init.d/zabbix_agentd 
+#[root@localhost core]# /etc/init.d/zabbix_agentd startReloading systemd:                  [  OK  ]
+#[root@localhost core]# /etc/init.d/zabbix_agentd start
+#Reloading systemd:                  [  OK  ]
+#Starting zabbix_agentd (via systemctl):                    [  OK  ]
+#[root@localhost core]# chkconfig zabbix_server on
+#[root@localhost core]# chkconfig zabbix_agentd on
+ Starting zabbix_agentd (via systemctl):                    [  OK  ]
+#chkconfig zabbix_server on
+#chkconfig zabbix_agentd on
+
+
+#编辑 php 页面控制文件
+#默认配置文件没有写入到我们的 nginx 的配置文件中，也就是不能加载到我们的 zabbix 页面目录 
+#cp -r /usr/local/src/zabbix-3.4.3/frontends/php/*   /usr/local/nginx/html/# vim /usr/local/nginx/conf/nginx.conf
+#location / {
+#root	html;
+#index	index.php index.html index.htm;	#找到此行内容，添加index.php
+#}
+
+#重启nginx服务和php-fpm服务
+# /usr/local/nginx/sbin/nginx -s reload ; 
+# /etc/init.d/zabbix_server restart
+# /etc/init.d/php-fpm restart
+
+#打开网页安装 zabbix 通过linux自带的浏览器访问自己的linux的IP地址
+#或者 curl http：//ip地址
+
+#开始检查环境，如图，发现很多环境不符合条件
+#https://uploader.shimo.im/f/xunjDbzqmX9ncNWh.png!thumbnail
+
+
+#编辑 php.ini 文件，修改环境
+# vim /usr/local/php/php.ini
+#post_max_size = 16M	 #修改
+#max_execution_time = 300	#修改
+#max_input_time = 300	#修改
+#date.timezone = Asia/Shanghai	#此行有注释，去注释并修改
+#always_populate_raw_post_data = -1	 #此行取消注释即可
+#mysqli.default_socket = /tmp/mysql.sock  #指定php连接mysql的sock路径
+# /etc/init.d/php-fpm restart  #重启fpm
+#刷新页面
+
+#https://uploader.shimo.im/f/guRu8daot8jtfUaa.png!thumbnail
+
+
+
+#如果提示没有安装PHP LDAP模块，为了不影响后面的功能，现在把这个模块重新编译安装进去：可以单独把这个模块编译安装进来：
+#[root@xuegod63zabbix-3.4.3]# cd /usr/local/src/php-5.6.13/ext/
+#cd ldap/
+# /usr/local/php/bin/phpize
+
+#./configure --with-php-config=/usr/local/php/bin/php-config --with-ldap
+
+#上面的过程会报错,提示缺少库文件:解决:
+#yum install openldap-devel openldap -y
+#rsync -avz /usr/lib64/libldap* /usr/lib/
+
+#再次configure,即可通过预编译
+
+#make && make install
+# vim /usr/local/php/php.ini
+添加：extension=ldap.so
+# /etc/init.d/php-fpm restart
+再次刷新即可
+
+
+#下一步：
+#输入user:zabbix,password:zabbix
+#以下默认，直接下一步
+
+
+#如果写入失败，直接download这个配置文件，然后上去
+#vim /usr/local/nginx/html/conf/zabbix.conf.php
+#<?php
+#// Zabbix GUI configuration file.
+#global $DB;
+
+#$DB['TYPE']     = 'MYSQL';
+#$DB['SERVER']   = '127.0.0.1';
+#$DB['PORT']     = '0';
+#$DB['DATABASE'] = 'zabbix';
+#$DB['USER']     = 'zabbix';
+#$DB['PASSWORD'] = 'zabbix';
+
+#// Schema name. Used for IBM DB2 and PostgreSQL.
+#$DB['SCHEMA'] = '';
+
+#$ZBX_SERVER     = 'localhost';
+#$ZBX_SERVER_PORT = '10051';
+#$ZBX_SERVER_NAME = '';
+
+#$IMAGE_FORMAT_DEFAULT = IMAGE_FORMAT_PNG;
+
+
+#然后刷新如果显示成功	
+#点击 Finish，完成安装！登陆 Zabbix 并配置 登陆之后我们修改语言 默认用户名和密码分别为  admin，zabbix 
+
+
+#点击右上角用户，然后选择语言
+#language chinese(zh_CN)
+#然后 Update 即可，页面变为中文
+
+#点击配置-主机 启用本主机（默认没有启动，点击后面红色的停用，则启用）
+
+#把zabbix_agent 也启动起来：
+# /usr/local/zabbix/sbin/zabbix_agentd 或者/usr/local/zabbix/sbin/zabbix_agentd start
+#再次刷新页面，可以看到，agent状态已经正常
+
+
+#可以看到已经开始出图
+#再次刷新页面，可以看到，agent状态已经正常,变绿即可！！
+
+#图表字符乱码的解决办法
+#在 Windows 下面找一个 ttf 的字体文件C:\Windows\Fonts
+#cd /usr/local/nginx/html/fonts/
+#mv DejaVuSans.ttf  DejaVuSans.bak
+#mv 微软雅黑.ttf  DejaVuSans.ttf
+
+#Zabbix 启动服务总结
+#Nginx 服务启动
+#Php-fpm 服务启动
+#Mysql 服务器启动 
+#测试LNMP环境正常
+#导入数据库、授权、源码安装zabbix
+#Zabbix_server 服务启动
+
+
+
+
