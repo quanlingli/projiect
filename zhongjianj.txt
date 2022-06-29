@@ -1,0 +1,292 @@
+#中间件安装部署
+
+#一、nginx
+#Nginx是一款轻量级的Web服务器、反向代理服务器，负载均衡，由于它的内存占用少，启动极快，高并发能力强，在互联网项目中广泛应用。
+
+#正向代理“代理”的是客户端，而且客户端是知道目标的，而目标是不知道客户端是通过VPN访问的。
+#当我们在外网访问百度的时候，其实会进行一个转发，代理到内网去，这就是所谓的反向代理，即反向代理“代理”的是服务器端，而且这一个过程对于客户端而言是透明的。
+
+#Nginx的Master-Worker模式
+#启动Nginx后，其实就是在80端口启动了Socket服务进行监听,Nginx涉及Master进程和Worker进程。
+
+#Master进程的作用是
+#读取并验证配置文件nginx.conf；管理worker进程
+#Worker进程的作用是
+#每一个Worker进程都维护一个线程（避免线程切换），处理连接和请求；注意Worker进程的个数由配置文件决定，一般和CPU个数相关（有利于进程切换），配置几个就有几个Worker进程。
+
+#Nginx如何做到热部署？
+#热部署，就是配置文件nginx.conf修改后，不需要stop Nginx，不需要中断请求，就能让配置文件生效！（nginx -s reload 重新加载/nginx -t检查配置/nginx -s stop）
+#修改配置文件nginx.conf后，重新生成新的worker进程，当然会以新的配置进行处理请求，而且新的请求必须都交给新的worker进程，至于老的worker进程，等把那些以前的请求处理完毕后，kill掉即可。
+
+#nginx.conf
+#nginx.conf是典型的分段配置文件
+#其实这是把Nginx作为web server来处理静态资源。
+#第一：location可以进行正则匹配，应该注意正则的几种形式以及优先级.
+#第二：Nginx能够提高速度的其中一个特性就是：动静分离，就是把静态资源放到Nginx上，由Nginx管理，动态请求转发给后端。
+#第三：我们可以在Nginx下把静态资源、日志文件归属到不同域名下（也即是目录），这样方便管理维护
+#第四：Nginx可以进行IP访问控制，有些电商平台，就可以在Nginx这一层，做一下处理，内置一个黑名单模块，那么就不必等请求通过Nginx达到后端在进行拦截，而是直接在Nginx这一层就处理掉。
+
+
+#反向代理【proxy_pass】
+#反向代理，其实就是在location这一段配置中的root替换成proxy_pass即可。root说明是静态资源，可以由Nginx进行返回；而proxy_pass说明是动态请求，需要进行转发，比如代理到Tomcat上
+#Nginx不仅仅可以反向代理请求，还可以由用户自定义设置HTTP HEADER。
+
+#user  nginx;
+#worker_processes  1;
+
+#events {
+#    worker_connections  1024;
+#}
+
+#http {
+#    include       mime.types;
+#    default_type  application/octet-stream;
+
+#    sendfile        on;
+
+#    keepalive_timeout  65;
+
+#        # 配置一个代理即 tomcat1 服务器
+#    upstream tomcatServer1 {
+#        server 192.168.50.136:9090;
+#    }
+
+## 配置一个代理即 tomcat2 服务器
+#    upstream tomcatServer2 {
+#        server 192.168.50.136:9091;
+#    }
+
+## 配置一个虚拟主机
+#    server {
+#        listen 80;
+#        server_name tomcat1.myapp.com;
+#        location / {
+#      域名 tomcat1.myapp.com 的请求全部转发到 tomcatServer1 即 tomcat1 服务上
+#                proxy_pass http://tomcatServer1;
+#                # 欢迎页面，按照从左到右的顺序查找页面
+#                index index.jsp index.html index.htm;
+#        }
+#    }
+
+#server {
+#        listen 80;
+#        server_name tomcat2.myapp.com;
+
+#        location / {
+#    # 域名 tomcat2.myapp.com 的请求全部转发到 tomcatServer2 即 tomcat2 服务上#            proxy_pass http://tomcatServer2;
+#            index index.jsp index.html index.htm;
+#        }
+#    }
+
+
+#负载均衡【upstream】
+#如果想指定多台来达到负载均衡呢?
+#第一，通过upstream来定义一组Tomcat，并指定负载策略（IPHASH、加权论调、最少连接），健康检查策略（Nginx可以监控这一组Tomcat的状态）等。
+#第二，将proxy_pass替换成upstream指定的值即可
+
+#负载均衡可能带来的问题？
+#负载均衡所带来的明显的问题是，一个请求，可以到A server，也可以到B server，这完全不受我们的控制，当然这也不是什么问题，只是我们得注意的是：用户状态的保存问题，如Session会话信息，不能在保存到服务器上。
+
+#user  nginx;
+#worker_processes  1;
+
+#events {
+#    worker_connections  1024;
+#}
+
+#http {
+#    include       mime.types;
+#    default_type  application/octet-stream;
+
+#    sendfile        on;
+
+#    keepalive_timeout  65;
+
+#        # 配置代理
+#    upstream tomcatServer {
+#        server 192.168.50.136:9090 weight=10;
+#        server 192.168.50.136:9091 weight=10;
+#    }
+
+
+## 配置一个虚拟主机
+#server {
+#        listen 80;
+#        server_name tomcat.myapp.com;
+#        location / {
+#                # 域名 tomcat.myapp.com 的请求全部转发到 tomcatServer 服务上 #               proxy_pass http://tomcatServer;
+#                # 欢迎页面，按照从左到右的顺序查找页面
+#                index index.jsp index.html index.htm;
+#        }
+#    }
+#}
+
+
+#缓存
+#缓存，是Nginx提供的，可以加快访问速度的机制，说白了，在配置上就是一个开启，同时指定目录，让缓存可以存储到磁盘上。
+
+
+#nginx部署搭建
+#Nginx是高度自由化的Web服务器，它的功能是由许多模块来支持。如果使用了某个模块，这个模块使用了一些类似zlib或OpenSSL等的第三方库，那么就必须先安装这些软件。
+#解决依赖
+#yum install gcc gcc-c++ autoconf automake zlib zlib-devel openssl openssl-devel pcre* pcre-devel  -y
+
+#下载pcre (已经下载的忽略次步)
+#wget http://downloads.sourceforge.net/project/pcre/pcre/8.37/pcre-8.37.tar.gz#tar xf pcre-8.37.tar.gz -C /usr/local/src/   解压到/usr/local/src
+解压此安装包即可，不需要安装，Nginx需要指定pcre的源码不是安装后的路径，此包的>
+功能是支持地址重写rewrite功能  pcre的依赖可以yum安装pcre和pcre-devel解决
+
+
+#下载nginx。(已经下载的忽略次步)
+#wget http://nginx.org/download/nginx-1.8.0.tar.gz
+#解压nginx安装包
+#tar xvf nginx-1.8.0.tar.gz -C /usr/local/src/ 
+#cd /usr/local/src/nginx-1.8.0
+
+#生成makefile编译依赖文件
+#./configure --prefix=/usr/local/nginx --with-http_dav_module --with-http_stub_status_module --with-http_addition_module --with-http_sub_module --with-http_flv_module --with-http_mp4_module --with-pcre=/usr/local/src/pcre-8.37
+
+#--with-http_dav_module                  #启用支持（增加PUT,DELETE,MKCOL：创建集合，COPY和MOVE方法）                               默认关闭，需要编译开启
+#--with-http_stub_status_module   #启用支持（获取Nginx上次启动以来的工作状态）#--with-http_addition_module         #启用支持（作为一个输出过滤器，支持不完全缓冲，分部分相应请求）
+#--with-http_sub_module #启用支持（允许一些其他文本替换Nginx相应中的一些文本）#--with-http_flv_module                   #启用支持（提供支持flv视频文件支持）#--with-http_mp4_module            #启用支持（提供支持mp4视频文件支持，提供伪流媒体服务端支持）
+#--with-pcre=/usr/local/src/pcre-8.37   #需要注意，这里指的是源码,用#./configure --help |grep pcre查看帮助
+
+#编译安装
+#make –j 2 && make install
+
+#创建nginx运行用户
+#useradd -M -u 8001 -s /sbin/nologin nginx
+
+
+#Nginx目录结构
+#ll /usr/local/nginx/
+
+#启动Nginx
+#usr/local/nginx/sbin/nginx
+#netstat -tlnp | grep nginx
+
+#使用浏览器测试   http://你的IP  124.220.176.239
+#curl http://124.220.176.239
+
+
+
+
+#二、java环境
+#官网下载jdk 安装包
+#wget --no-cookies --no-check-certificate --header "Cookie: gpw_e24=http%3A%2F%2Fwww.oracle.com%2F; oraclelicense=accept-securebackup-cookie" "http://download.oracle.com/otn-pub/java/jdk/8u141-b15/336fa29ff2bb4ef291e347e091f7f4a7/jdk-8u141-linux-x64.tar.gz"
+
+#解压安装包，并将解压好的安装包移动到/usr/local/java目录下
+#tar xzf jdk-8u141-linux-x64.tar.gz
+#mv jdk1.8.0_141/ /usr/local/java
+
+#配置环境变量，在/usr/local/下 vim  /etc/profile
+#JAVA_HOME=/usr/local/java/
+#JRE_HOME=/usr/local/java/jre
+#CLASS_PATH=.:$JAVA_HOME/lib/dt.jar:$JAVA_HOME/lib/tools.jar:$JRE_HOME/lib
+#PATH=$PATH:$JAVA_HOME/bin:$JRE_HOME/bin
+#export JAVA_HOME JRE_HOME CLASS_PATH PATH
+
+#刷新环境变量使其生效
+#source /etc/profile 
+
+#测试环境是否配置成功
+#java –version(执行的代码脚本名称)
+
+
+
+#三、tomcat安装
+#官网：http://tomcat.apache.org/
+#Tomcat 服务器是一个免费的开放源代码的Web 应用服务器，属于轻量级应用服务器，在中小型系统和并发访问用户不是很多的场合下被普遍使用，是开发和调试JSP 程序的首选
+
+#在一台机器上配置好Apache 服务器，可利用它响应HTML（标准通用标记语言下的一个应用）页面的访问请求。实际上Tomcat是Apache 服务器的扩展，但运行时它是独立运行的，所以当你运行tomcat 时，它实际上作为一个与Apache 独立的进程单独运行的。
+
+#当配置正确时，Apache 为HTML页面服务，而Tomcat 实际上运行JSP 页面和Servlet。另外，Tomcat和IIS等Web服务器一样，具有处理HTML页面的功能，另外它还是一个Servlet和JSP容器，独立的Servlet容器是Tomcat的默认模式。不过，Tomcat处理静态HTML的能力不如Apache服务器。
+
+#一般情况下多用Nginx+Tomcat，Nginx处理静态，Tomcat处理动态程序。 
+
+#下载tomcat安装包
+#wget https://mirrors.cnnic.cn/apache/tomcat/tomcat-8/v8.5.81/bin/apache-tomcat-8.5.81.tar.gz
+
+#解压安装包到/usr/local目录下
+#tar xf apache-tomcat-8.5.81.tar.gz -C /usr/local/
+
+#重命名apache-tomcat-8.5.81为tomcat
+#在/usr/local目录下 mv apache-tomcat-8.5.81 tomcat
+
+#定义tomcat所需的环境变量
+#echo "export TOMCAT_HOME=/usr/local/tomcat" >> /etc/profile
+
+#重新加载环境变量
+#source /etc/profile
+
+#启动tomcat
+#/usr/local/tomcat/bin/startup.sh
+
+#关闭tomcat命令
+#/usr/local/tomcat/bin/shutdown.sh
+
+#使用server启动tomcat
+#vim /etc/init.d/tomcat
+##!/bin/bash 
+## Init file for Tomcat server daemon 
+# 
+## chkconfig: 2345 96 14 
+## description: Tomcat server daemon 
+#JAVA_OPTS='-Xms64m -Xmx128m' 
+#JAVA_HOME=/usr/local/java 
+#CATALINA_HOME=/usr/local/tomcat 
+#export JAVA_OPTS JAVA_HOME CATALINA_HOME 
+#exec $CATALINA_HOME/bin/catalina.sh $*
+
+#source /etc/profile 
+
+#修改启动脚本权限，增加可执行权限
+#chmod +x /etc/init.d/tomcat
+
+#启动tomcat
+#service tomcat start
+
+#访问你的IP+8080端口（记得开放8080端口）
+#124.220.176.239:8080
+
+
+
+
+
+#tomcat目录结构
+#bin  ##存放启动、关闭tomcat或者其它功能的脚本(.bat文件和.sh文件)
+#BUILDING.txt
+#conf  ##存放tomcat配置相关的文件
+#CONTRIBUTING.md
+#lib  ##存放Web应用能访问的JAR包
+#LICENSE
+#logs  ##存放tomcat日志文件
+#NOTICE
+#README.md
+#RELEASE-NOTES
+#RUNNING.txt
+#temp  ##临时文件
+#webapps  ##Web应用程序的跟目录
+#work  ##用以产生有JSP编译出的Servlet的.java和.class文件
+
+#配置文件conf结构
+#-rw-------. 1root root  128736月   504:23 catalina.policy 
+-rw-------. 1root root   72436月   504:23 catalina.properties 
+-rw-------. 1root root   14006月   504:23 context.xml 
+-rw-------. 1root root   11496月   504:23 jaspic-providers.xml 
+-rw-------. 1root root   23136月   504:23 jaspic-providers.xsd 
+-rw-------. 1root root   41446月   504:23 logging.properties 
+-rw-------. 1root root   75116月   504:23 server.xml  ##主配置文件 
+-rw-------. 1root root   21646月   504:23 tomcat-users.xml  ##Tomcat管理用户配置文件 
+-rw-------. 1root root   26336月   504:23 tomcat-users.xsd 
+-rw-------. 1root root 1719626月   504:23 web.xml
+
+
+#日志文件logs结构
+#-rw-r-----. 1root root 4757111月 1611:37 catalina.2019-11-16.log 
+-rw-r-----. 1root root 4757111月 1611:37 catalina.out  ##实时日志 
+-rw-r-----. 1root root     011月 1611:27 host-manager.2019-11-16.log 
+-rw-r-----. 1root root  130911月 1611:29 localhost.2019-11-16.log  ##访问日志 -rw-r-----. 1root root     011月 1611:27 localhost_access_log.2019-11-16.txt -rw-r-----. 1root root     011月 1611:27 manager.2019-11-16.log  ##管理日志
+
+
+
